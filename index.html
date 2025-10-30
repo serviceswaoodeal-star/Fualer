@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#007bff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Fualer</title>
+
+    <!-- Leaflet for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <!-- Razorpay Checkout -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Poppins',sans-serif; background:#f4f7fa; min-height:100vh; }
+        .splash { position:fixed; top:0; left:0; right:0; bottom:0; background:#007bff; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; animation:fadeOut 0.6s forwards 1.8s; }
+        .splash h1 { color:white; margin-top:20px; font-size:32px; font-weight:700; letter-spacing:2px; }
+        @keyframes fadeOut { to{opacity:0; visibility:hidden} }
+
+        .container { width:90%; max-width:400px; margin:20px auto; padding:24px; background:white; border-radius:20px; box-shadow:0 12px 30px rgba(0,0,0,0.12); }
+        label { display:block; margin:16px 0 8px; font-weight:600; color:#007bff; font-size:15px; }
+        input { width:100%; padding:14px; border:2px solid #e0e0e0; border-radius:12px; font-size:16px; transition:0.3s; }
+        input:focus { border-color:#007bff; outline:none; }
+
+        button { width:100%; padding:16px; margin:12px 0; border:none; border-radius:16px; font-size:18px; font-weight:700; color:white; cursor:pointer; transition:0.3s; }
+        .btn-primary { background:#28a745; box-shadow:0 4px 10px rgba(40,167,69,0.3); }
+        .btn-primary:hover { background:#218838; transform:translateY(-2px); }
+        .btn-secondary { background:#6c757d; }
+        #stop-btn { background:#dc3545; display:none; }
+        #resume-btn { background:#28a745; display:none; }
+        #reset-btn { background:#ffc107; color:#212529; }
+
+        .odometer { font-family:'Courier New',monospace; font-size:48px; text-align:center; background:#1a1a1a; color:#0f0; padding:20px; border-radius:16px; letter-spacing:6px; margin:20px 0; box-shadow:0 4px 15px rgba(0,0,0,0.2); }
+        .status { text-align:center; padding:12px; border-radius:12px; margin:10px 0; font-weight:600; font-size:16px; }
+        .running { background:#d4edda; color:#155724; }
+        .stopped { background:#f8d7da; color:#721c24; }
+
+        #result-box { background:linear-gradient(135deg, #e8f5e8, #d4edda); padding:22px; border-radius:16px; margin:15px 0; border:2px solid #b8e0c1; }
+        #result-box h2 { margin:8px 0; font-size:16px; color:#155724; font-weight:600; }
+
+        .hidden { display:none !important; }
+
+        header { background:#007bff; color:white; text-align:center; padding:18px; font-size:24px; font-weight:700; position:sticky; top:0; z-index:101; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(0,0,0,0.1); }
+        #menu-icon { position:absolute; left:18px; font-size:26px; cursor:pointer; }
+        #notification-icon { position:absolute; right:18px; font-size:24px; cursor:pointer; color:#fff; }
+        #notification-icon i { position:relative; }
+        #notification-icon .badge { 
+            position:absolute; top:-8px; right:-8px; background:#ff3b30; color:white; font-size:10px; 
+            width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; 
+            font-weight:bold; 
+        }
+
+        #sidebar { position:fixed; top:0; left:-300px; width:300px; height:100%; background:white; box-shadow:2px 0 15px rgba(0,0,0,0.15); transition:left 0.3s ease; z-index:1000; padding:20px; overflow-y:auto; }
+        #sidebar.active { left:0; }
+        #close-sidebar { position:absolute; top:20px; right:20px; font-size:26px; cursor:pointer; color:#007bff; }
+
+        .profile-pic { width:100px; height:100px; border-radius:50%; overflow:hidden; margin:20px auto; cursor:pointer; border:4px solid #007bff; box-shadow:0 4px 15px rgba(0,123,255,0.3); position:relative; }
+        .profile-pic img { width:100%; height:100%; object-fit:cover; }
+        .profile-pic i { position:absolute; bottom:5px; right:5px; background:#007bff; color:white; padding:8px; border-radius:50%; font-size:16px; }
+
+        .profile-info { text-align:center; margin-bottom:20px; }
+        .profile-info h2 { margin:10px 0 5px; font-size:20px; font-weight:600; color:#007bff; }
+        .profile-info p { color:#555; font-size:15px; font-weight:500; }
+
+        .menu-list { list-style:none; margin-top:20px; }
+        .menu-list li { padding:16px; border-bottom:1px solid #eee; cursor:pointer; display:flex; align-items:center; font-size:16px; }
+        .menu-list li i { margin-right:12px; color:#007bff; font-size:18px; }
+
+        #subscribe-btn, #subscribe-btn2 { background:linear-gradient(135deg, #ff6b35, #f7931e); color:white; font-weight:700; box-shadow:0 4px 15px rgba(255,107,53,0.4); }
+        #subscribe-btn:hover, #subscribe-btn2:hover { transform:translateY(-2px); }
+
+        #logout-btn, #logout-btn2 { background:#dc3545; box-shadow:0 4px 10px rgba(220,53,69,0.3); }
+        #logout-btn:hover, #logout-btn2:hover { background:#c82333; }
+
+        #bottom-nav { position:fixed; bottom:0; left:0; right:0; background:#007bff; display:flex; justify-content:space-around; z-index:999; box-shadow:0 -2px 10px rgba(0,0,0,0.1); }
+        .tab { padding:14px; color:white; cursor:pointer; text-align:center; flex:1; transition:all 0.3s; display:flex; flex-direction:column; align-items:center; font-size:13px; font-weight:600; }
+        .tab i { font-size:22px; margin-bottom:4px; }
+        .tab.active { background:#0056b3; border-radius:12px 12px 0 0; }
+
+        .app-section { 
+            transition: opacity 0.3s; 
+            padding-bottom: 90px !important; 
+            min-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        #map { height:300px; margin:20px 0; border-radius:16px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.1); z-index:1; }
+
+        #popup { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#28a745; color:white; padding:20px 30px; border-radius:16px; z-index:200; display:none; text-align:center; font-size:18px; font-weight:600; box-shadow:0 8px 25px rgba(0,0,0,0.2); }
+        #popup.anim { animation:popupAnim 2s forwards; }
+        @keyframes popupAnim { 0% {opacity:0; transform:translate(-50%,-50%) scale(0.8);} 20% {opacity:1; transform:translate(-50%,-50%) scale(1.05);} 80% {opacity:1; transform:translate(-50%,-50%) scale(1);} 100% {opacity:0; transform:translate(-50%,-50%) scale(0.8);} }
+
+        /* Live Ride Page */
+        #live-ride-page { 
+            position:fixed; top:0; left:0; width:100%; height:100%; background:#f4f7fa; 
+            z-index:200; overflow-y:auto; padding-top:70px; padding-bottom:90px; 
+        }
+        #live-ride-page header { 
+            position:fixed; top:0; left:0; width:100%; z-index:201; 
+        }
+        #live-ride-page #bottom-nav { 
+            position:fixed; bottom:0; z-index:999; 
+        }
+
+        /* Full Screen Popups */
+        .popup-full { position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:300; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; }
+        .popup-full h2 { color:#007bff; margin-bottom:20px; text-align:center; }
+        .popup-full .container { margin:20px auto; width:90%; max-width:400px; }
+
+        /* Locked Fields */
+        .locked-field { 
+            background:#f0f0f0; border:2px solid #28a745; color:#155724; 
+            padding:12px; border-radius:12px; text-align:center; margin:10px 0; 
+            font-weight:600; 
+        }
+        .locked-field small { display:block; color:#555; font-weight:normal; font-size:12px; }
+
+        /* Last Ride Popup */
+        #last-ride-popup { 
+            background:#fff; padding:25px; border-radius:20px; max-width:380px; 
+            box-shadow:0 10px 30px rgba(0,0,0,0.2); text-align:center; margin:20px; 
+        }
+        #last-ride-popup .ride-info { 
+            background:#e9f7ef; padding:15px; border-radius:12px; margin:15px 0; 
+            font-size:14px; 
+        }
+
+        /* History & Ride Summary */
+        .history-item, .ride-summary { 
+            background:#f8f9fa; padding:15px; border-radius:12px; margin:15px 0; 
+            box-shadow:0 4px 10px rgba(0,0,0,0.1); 
+        }
+        .history-item p, .ride-summary p { margin:5px 0; font-size:14px; }
+        .history-item button { margin-top:10px; }
+
+        /* === SUBSCRIPTION PAGE === */
+        #subscription-page {
+            position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            z-index:400; overflow-y:auto; padding:20px; display:flex; flex-direction:column; align-items:center;
+        }
+        #subscription-page .back-btn {
+            position:absolute; top:20px; left:20px; background:#fff; color:#667eea; width:44px; height:44px; 
+            border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; 
+            box-shadow:0 4px 15px rgba(0,0,0,0.2); cursor:pointer; z-index:401;
+        }
+        #subscription-page h1 {
+            color:white; font-size:28px; margin:60px 0 10px; text-align:center; font-weight:700;
+        }
+        #subscription-page p {
+            color:#e0dfff; text-align:center; margin-bottom:30px; font-size:16px;
+        }
+        .plan-card {
+            background:white; border-radius:20px; padding:24px; margin:15px 0; width:90%; max-width:380px;
+            box-shadow:0 10px 30px rgba(0,0,0,0.2); text-align:center; transition:0.3s; cursor:pointer;
+            position:relative; overflow:hidden;
+        }
+        .plan-card::before {
+            content:''; position:absolute; top:0; left:0; width:100%; height:6px;
+        }
+        .plan-card.week::before { background:linear-gradient(90deg, #ff9a9e, #fad0c4); }
+        .plan-card.month::before { background:linear-gradient(90deg, #a18cd1, #fbc2eb); }
+        .plan-card.year::before { background:linear-gradient(90deg, #84fab0, #8fd3f4); }
+        .plan-card:hover { transform:translateY(-8px); box-shadow:0 15px 35px rgba(0,0,0,0.3); }
+        .plan-card h3 { font-size:22px; margin:10px 0; color:#333; }
+        .plan-card .price { font-size:32px; font-weight:700; color:#667eea; margin:10px 0; }
+        .plan-card .price small { font-size:14px; color:#888; }
+        .plan-card .features { text-align:left; margin:15px 0; color:#555; font-size:14px; }
+        .plan-card .features li { margin:8px 0; display:flex; align-items:center; }
+        .plan-card .features li i { color:#28a745; margin-right:8px; }
+        .plan-card button {
+            background:linear-gradient(135deg, #667eea, #764ba2); margin-top:15px;
+        }
+
+        /* Success Animation */
+        #success-popup {
+            position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); 
+            z-index:500; display:none; flex-direction:column; align-items:center; justify-content:center;
+            animation:fadeIn 0.5s;
+        }
+        #success-popup .icon {
+            width:100px; height:100px; background:#28a745; border-radius:50%; 
+            display:flex; align-items:center; justify-content:center; font-size:50px; color:white;
+            animation:pop 0.6s;
+        }
+        #success-popup h2 { color:white; margin:20px 0; font-size:24px; }
+        #success-popup p { color:#ddd; text-align:center; max-width:300px; }
+        @keyframes pop { 0% {transform:scale(0);} 50% {transform:scale(1.2);} 100% {transform:scale(1);} }
+        @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+    </style>
+</head>
+<body>
+
+    <!-- Splash Screen -->
+    <div class="splash">
+        <h1>Fualer</h1>
+    </div>
+
+    <!-- Popup -->
+    <div id="popup"></div>
+
+    <!-- Meter Reading Popup -->
+    <div id="meter-popup" class="popup-full hidden">
+        <div class="container">
+            <h2>मीटर रिडींग भरा</h2>
+            <input type="number" id="meter-input" step="0.1" placeholder="उदा. 24210.5">
+            <button id="save-meter-btn" class="btn-primary">मीटर रिडींग save करा</button>
+        </div>
+    </div>
+
+    <!-- Refuel Popup -->
+    <div id="refuel-popup" class="popup-full hidden">
+        <div class="container">
+            <h2>आज पुन्हा पेट्रोल भरले काय?</h2>
+            <button id="refuel-yes" class="btn-primary">होय</button>
+            <button id="refuel-no" class="btn-secondary">नाही</button>
+            <div id="refuel-amount-section" style="display:none; margin-top:20px;">
+                <label>पेट्रोलचे पैसे (₹)</label>
+                <input type="number" id="refuel-amount" step="0.01" placeholder="उदा. 120">
+                <button id="save-refuel-btn" class="btn-primary">सेव्ह करा</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mileage Popup -->
+    <div id="mileage-popup" class="popup-full hidden">
+        <div class="container">
+            <h2>तुमची गाडी किती मायलेज देते माहित आहे काय?</h2>
+            <button id="mileage-yes" class="btn-primary">होय</button>
+            <button id="mileage-no" class="btn-secondary">नाही</button>
+            <div id="mileage-input-section" style="display:none; margin-top:20px;">
+                <label>मायलेज (किमी/लिटर)</label>
+                <input type="number" id="mileage-input" step="0.1" placeholder="उदा. 42">
+                <button id="save-mileage-btn" class="btn-primary">डन करा</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Ride Popup -->
+    <div id="last-ride-popup" class="popup-full hidden">
+        <div class="container">
+            <h2>शेवटची राइड</h2>
+            <div class="ride-info" id="last-ride-info"></div>
+            <button id="continue-last-ride-btn" class="btn-primary">राइड सुरु करा</button>
+            <button id="skip-last-ride-btn" class="btn-secondary" style="margin-top:10px;">नवीन राइड सुरु करा</button>
+        </div>
+    </div>
+
+    <!-- Login / Signup -->
+    <div class="container" id="auth-section">
+        <div id="login-form">
+            <h2 style="text-align:center; color:#007bff; margin-bottom:20px; font-weight:700;">लॉगिन करा</h2>
+            <label>मोबाईल नंबर</label>
+            <input type="tel" id="login-mobile" placeholder="उदा. 9871234560" maxlength="10">
+            <button id="login-btn" class="btn-primary">लॉगिन करा</button>
+            <p style="text-align:center; margin-top:15px;">
+                <a href="#" id="show-signup" style="color:#007bff; text-decoration:none; font-weight:600;">साइन अप करा</a>
+            </p>
+        </div>
+
+        <div id="signup-form" class="hidden">
+            <h2 style="text-align:center; color:#007bff; margin-bottom:20px; font-weight:700;">साइन अप करा</h2>
+            <label>तुमचं नाव</label>
+            <input type="text" id="signup-name" placeholder="उदा. राम शिंदे">
+            <label>गाडी नंबर</label>
+            <input type="text" id="signup-vehicle" placeholder="उदा. MH 04 AB 1234">
+            <label>मोबाईल नंबर</label>
+            <input type="tel" id="signup-mobile" placeholder="उदा. 9871234560" maxlength="10">
+            <button id="signup-btn" class="btn-primary">साइन अप करा</button>
+            <p style="text-align:center; margin-top:15px;">
+                <a href="#" id="show-login" style="color:#007bff; text-decoration:none; font-weight:600;">आधीच अकाउंट आहे? लॉगिन करा</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="hidden" id="main-app">
+        <header id="user-header">Fualer
+            <div id="menu-icon"><i class="fas fa-bars"></i></div>
+            <div id="notification-icon"><i class="fas fa-bell"></i><span class="badge">!</span></div>
+        </header>
+
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div id="close-sidebar"><i class="fas fa-arrow-left"></i></div>
+            <div class="profile-pic" onclick="document.getElementById('profile-upload').click()">
+                <img id="profile-img" src="" alt="Profile">
+                <i class="fas fa-camera"></i>
+            </div>
+            <input type="file" id="profile-upload" hidden accept="image/*">
+            <div class="profile-info">
+                <h2 id="profile-name">नाव</h2>
+                <p id="profile-vehicle">गाडी नंबर</p>
+            </div>
+            <ul class="menu-list">
+                <li><i class="fas fa-file-contract"></i> टर्म & कंडिशन</li>
+                <li><i class="fas fa-shield-alt"></i> प्रायव्हसी पॉलिसी</li>
+                <li><i class="fas fa-phone"></i> कॉन्टॅक्ट अस</li>
+            </ul>
+            <button id="subscribe-btn"><i class="fas fa-crown"></i> सबस्क्रिप्शन घ्या</button>
+            <button id="logout-btn"><i class="fas fa-sign-out-alt"></i> लॉगऑऊट</button>
+        </div>
+
+        <!-- Home Section -->
+        <div id="home-section" class="app-section container">
+            <div id="locked-initial-meter" class="locked-field hidden">
+                <strong>सुरुवातीचे मीटर रिडींग:</strong> <span id="locked-meter-value"></span> <small>(लॉक)</small>
+            </div>
+            <div id="locked-petrol" class="locked-field hidden">
+                <strong>पेट्रोल:</strong> ₹<span id="locked-petrol-value"></span> (<span id="locked-liters-value"></span> L) <small>(लॉक)</small>
+            </div>
+            <div id="locked-mileage" class="locked-field hidden">
+                <strong>मायलेज:</strong> <span id="locked-mileage-value"></span> किमी/लिटर <small>(लॉक)</small>
+            </div>
+
+            <div id="input-section">
+                <label>पेट्रोलचा भाव (₹/लिटर)</label>
+                <input type="number" id="price" step="0.01" placeholder="105">
+                <label>गाडीत टाकलेले पैसे (₹)</label>
+                <input type="number" id="amount" step="0.01" placeholder="120">
+                <label>गाडी किती किलोमीटर चालली आहे?</label>
+                <input type="number" id="initial_driven" step="0.1" placeholder="0" value="0">
+                <label>मायलेज (किमी/लिटर)</label>
+                <input type="number" id="mileage" step="0.1" placeholder="42">
+                <label>CREATE YOUR RIDE</label>
+                <div style="display:flex; justify-content:space-around; margin:15px 0;">
+                    <label><input type="radio" name="createRide" value="yes"> YES</label>
+                    <label><input type="radio" name="createRide" value="no" checked> NO</label>
+                </div>
+                <button id="setup-btn" class="btn-primary" style="font-size:20px; padding:18px; box-shadow:0 6px 15px rgba(40,167,69,0.4);">
+                    GPS तात्काळ सुरू करा
+                </button>
+            </div>
+        </div>
+
+        <!-- Ride Section -->
+        <div id="ride-section" class="app-section container hidden">
+            <div id="ride-list"></div>
+        </div>
+
+        <!-- History Section -->
+        <div id="history-section" class="app-section container hidden">
+            <div id="history-list"></div>
+        </div>
+
+        <!-- Profile Section -->
+        <div id="profile-section" class="app-section container hidden">
+            <div class="profile-pic" onclick="document.getElementById('profile-upload2').click()">
+                <img id="profile-img2" src="" alt="Profile">
+                <i class="fas fa-camera"></i>
+            </div>
+            <input type="file" id="profile-upload2" hidden accept="image/*">
+            <div class="profile-info">
+                <h2 id="profile-name2">नाव</h2>
+                <p id="profile-vehicle2">गाडी नंबर</p>
+            </div>
+            <ul class="menu-list">
+                <li><i class="fas fa-file-contract"></i> टर्म & कंडिशन</li>
+                <li><i class="fas fa-shield-alt"></i> प्रायव्हसी पॉलिसी</li>
+                <li><i class="fas fa-phone"></i> कॉन्टॅक्ट अस</li>
+            </ul>
+            <button id="subscribe-btn2"><i class="fas fa-crown"></i> सबस्क्रिप्शन घ्या</button>
+            <button id="logout-btn2"><i class="fas fa-sign-out-alt"></i> लॉगऑऊट</button>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav id="bottom-nav">
+            <div class="tab active" data-tab="home"><i class="fas fa-home"></i><span>Home</span></div>
+            <div class="tab" data-tab="ride"><i class="fas fa-route"></i><span>Ride</span></div>
+            <div class="tab" data-tab="history"><i class="fas fa-history"></i><span>History</span></div>
+            <div class="tab" data-tab="profile"><i class="fas fa-user"></i><span>Profile</span></div>
+        </nav>
+    </div>
+
+    <!-- Live Ride Page -->
+    <div id="live-ride-page" class="hidden">
+        <header>Fualer</header>
+        <div class="container" id="running-section">
+            <div class="odometer" id="odometer">00000.0</div>
+            <div class="status stopped" id="status">प्रतीक्षा...</div>
+
+            <div id="result-box">
+                <h2 id="initial-meter">सुरुवातीचे मीटर: 0</h2>
+                <h2 id="current-meter">चालू मीटर: 0</h2>
+                <h2 id="filled-petrol">टाकलेले: ₹0 (0 L)</h2>
+                <h2 id="used-petrol">वापरलेले: ₹0 (0 L)</h2>
+                <h2 id="remaining-petrol"><strong>शिल्लक: ₹0 (0 L)</strong></h2>
+                <h2 id="remaining-km"><strong>अजून: 0 किमी</strong></h2>
+                <h2 id="current-speed">स्पीड: 0 किमी/तास</h2>
+                <h2 id="driven-km">गाडी चाललेले: 0.0 किमी</h2>
+            </div>
+
+            <div id="map" class="hidden"></div>
+
+            <button id="stop-btn">थांबवा</button>
+            <button id="resume-btn">Ride सुरु करा</button>
+            <button id="reset-btn">रीसेट</button>
+        </div>
+
+        <!-- Bottom Nav in Live Ride -->
+        <nav id="bottom-nav">
+            <div class="tab active" data-tab="home"><i class="fas fa-home"></i><span>Home</span></div>
+            <div class="tab" data-tab="ride"><i class="fas fa-route"></i><span>Ride</span></div>
+            <div class="tab" data-tab="history"><i class="fas fa-history"></i><span>History</span></div>
+            <div class="tab" data-tab="profile"><i class="fas fa-user"></i><span>Profile</span></div>
+        </nav>
+    </div>
+
+    <!-- SUBSCRIPTION PAGE -->
+    <div id="subscription-page" class="hidden">
+        <div class="back-btn" onclick="closeSubscriptionPage()">←</div>
+        <h1>सबस्क्रिप्शन प्लॅन्स</h1>
+        <p>तुमच्या गरजेनुसार निवडा</p>
+
+        <div class="plan-card week" onclick="buyPlan('week', 49, '1 आठवडा')">
+            <h3>1 आठवडा</h3>
+            <div class="price">₹49 <small>/आठवडा</small></div>
+            <ul class="features">
+                <li>पूर्ण GPS ट्रॅकिंग</li>
+                <li>व्हॉइस अलर्ट</li>
+                <li>हिस्ट्री & मॅप</li>
+            </ul>
+            <button>आता घ्या</button>
+        </div>
+
+        <div class="plan-card month" onclick="buyPlan('month', 99, '3 महिने')">
+            <h3>3 महिने</h3>
+            <div class="price">₹99 <small>/3 महिने</small></div>
+            <ul class="features">
+                <li>सर्व फीचर्स</li>
+                <li>प्रायोरिटी सपोर्ट</li>
+                <li>अॅड-फ्री</li>
+            </ul>
+            <button>आता घ्या</button>
+        </div>
+
+        <div class="plan-card year" onclick="buyPlan('year', 199, '1 वर्ष')">
+            <h3>1 वर्ष</h3>
+            <div class="price">₹199 <small>/वर्ष</small></div>
+            <ul class="features">
+                <li>सर्व फीचर्स</li>
+                <li>विशेष डिस्काउंट</li>
+                <li>लाइफटाइम अपडेट्स</li>
+            </ul>
+            <button>आता घ्या</button>
+        </div>
+    </div>
+
+    <!-- SUCCESS POPUP -->
+    <div id="success-popup" class="hidden">
+        <div class="icon"><i class="fas fa-check"></i></div>
+        <h2>सबस्क्रिप्शन यशस्वी!</h2>
+        <p id="success-message"></p>
+        <button class="btn-primary" style="margin-top:20px;" onclick="closeSuccessPopup()">सुरू ठेवा</button>
+    </div>
+
+    <script>
+        // === ELEMENTS ===
+        const authSection = document.getElementById('auth-section');
+        const mainApp = document.getElementById('main-app');
+        const liveRidePage = document.getElementById('live-ride-page');
+        const subscriptionPage = document.getElementById('subscription-page');
+        const successPopup = document.getElementById('success-popup');
+        const badge = document.querySelector('#notification-icon .badge');
+
+        // === STORAGE ===
+        let users = JSON.parse(localStorage.getItem('users') || '{}');
+        let currentUser = localStorage.getItem('currentUser');
+        let userData = {}, subscription = {}, history = [], rideSummaries = [], initialSetup = {};
+
+        // === GPS VARIABLES ===
+        let watchId = null, odometer = 0, filledLiters = 0, price = 0, mileage = 0;
+        let lastPosition = null, lastTime = null, isRunning = false;
+        let positions = [], startTime = null, createRide = false;
+        let map = null, polyline = null;
+        let initialMeterReading = 0, currentMeterReading = 0;
+
+        // === VOICE ALERT TRACKING ===
+        window.alertedLevels = {};
+
+        // === MARATHI VOICE ===
+        let marathiVoice = null;
+        function ensureMarathiVoice() {
+            if (marathiVoice) return;
+            const voices = speechSynthesis.getVoices();
+            marathiVoice = voices.find(v => v.lang === 'mr-IN') || 
+                          voices.find(v => v.name.toLowerCase().includes('marathi') || v.lang.startsWith('mr'));
+        }
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = ensureMarathiVoice;
+        }
+        setTimeout(ensureMarathiVoice, 500);
+
+        function triggerVoiceAlert(remainingKm) {
+            if (!('speechSynthesis' in window)) return;
+            ensureMarathiVoice();
+            if (!marathiVoice) return;
+
+            const message = `तुमची गाडी आता फक्त ${remainingKm.toFixed(1)} किलोमीटर पर्यंत चालु शकते, कृपया लवकर पेट्रोल भरा`;
+            const speak = () => {
+                const utterance = new SpeechSynthesisUtterance(message);
+                utterance.voice = marathiVoice;
+                utterance.lang = 'mr-IN';
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                speechSynthesis.speak(utterance);
+            };
+            speak();
+            setTimeout(speak, 2000);
+            setTimeout(speak, 4000);
+        }
+
+        function updateResults(speed = 0) {
+            currentMeterReading = initialMeterReading + odometer;
+            const usedLiters = odometer / mileage;
+            const remainingLiters = Math.max(0, filledLiters - usedLiters);
+            const remainingRupees = remainingLiters * price;
+            const remainingKm = remainingLiters * mileage;
+
+            document.getElementById('initial-meter').textContent = `सुरुवातीचे मीटर: ${initialMeterReading.toFixed(1)} (लॉक)`;
+            document.getElementById('current-meter').textContent = `चालू मीटर: ${currentMeterReading.toFixed(1)}`;
+            document.getElementById('filled-petrol').textContent = `टाकलेले: ${formatPetrol(price * filledLiters, filledLiters)}`;
+            document.getElementById('used-petrol').textContent = `वापरलेले: ${formatPetrol(usedLiters * price, usedLiters)}`;
+            document.getElementById('remaining-petrol').innerHTML = `<strong>शिल्लक: ${formatPetrol(remainingRupees, remainingLiters)}</strong>`;
+            document.getElementById('remaining-km').innerHTML = `<strong>अजून: ${remainingKm.toFixed(1)} किमी</strong>`;
+            document.getElementById('current-speed').textContent = `स्पीड: ${speed.toFixed(1)} किमी/तास`;
+            document.getElementById('driven-km').textContent = `गाडी चाललेले: ${odometer.toFixed(1)} किमी`;
+
+            if (remainingKm <= 5 && remainingKm > 0) {
+                const roundedKm = Math.ceil(remainingKm * 2) / 2;
+                const key = roundedKm.toFixed(1);
+                if (!window.alertedLevels[key]) {
+                    triggerVoiceAlert(roundedKm);
+                    window.alertedLevels[key] = true;
+                }
+            }
+            return remainingKm;
+        }
+
+        function formatPetrol(rupees, liters) {
+            return `₹${rupees.toFixed(2)} (${liters.toFixed(2)} L)`;
+        }
+
+        function updateOdometer() {
+            document.getElementById('odometer').textContent = odometer.toFixed(1).padStart(7, '0');
+        }
+
+        function getDistance(p1, p2) {
+            const R = 6371000;
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLon = (p2.lon - p1.lon) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) / 1000;
+        }
+
+        function initMap() {
+            if (map) return;
+            document.getElementById('map').classList.remove('hidden');
+            setTimeout(() => {
+                map = L.map('map').setView([0, 0], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+                polyline = L.polyline([], {color: 'red'}).addTo(map);
+            }, 100);
+        }
+
+        function startGPSTracking() {
+            if (isRunning) return;
+            isRunning = true;
+            document.getElementById('status').textContent = 'GPS शोधत आहे...';
+            document.getElementById('status').className = 'status running';
+
+            watchId = navigator.geolocation.watchPosition(
+                pos => {
+                    const now = Date.now();
+                    const { latitude: lat, longitude: lon, speed: gpsSpeed } = pos.coords;
+                    let speed = gpsSpeed ? gpsSpeed * 3.6 : 0;
+
+                    if (lastPosition && lastTime) {
+                        const dist = getDistance(lastPosition, {lat, lon});
+                        const timeDiff = (now - lastTime) / 1000;
+                        if (timeDiff > 0 && !gpsSpeed) {
+                            speed = (dist / timeDiff) * 3.6;
+                        }
+                        odometer += dist;
+                    }
+
+                    lastPosition = {lat, lon};
+                    lastTime = now;
+                    positions.push({lat, lon, time: now});
+                    document.getElementById('status').textContent = 'GPS चालू!';
+                    updateOdometer();
+                    updateResults(speed);
+
+                    if (createRide && map) {
+                        const latLng = [lat, lon];
+                        polyline.addLatLng(latLng);
+                        map.setView(latLng, 13);
+                    }
+                },
+                err => {
+                    let msg = '';
+                    if (err.code === 1) msg = 'परवानगी नाकारली!';
+                    else if (err.code === 2) msg = 'GPS सिग्नल नाही...';
+                    else if (err.code === 3) msg = 'टाइमआउट!';
+                    document.getElementById('status').textContent = msg;
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+            );
+        }
+
+        function pauseTracking() {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+            isRunning = false;
+            document.getElementById('status').textContent = 'थांबले';
+            document.getElementById('status').className = 'status stopped';
+        }
+
+        function showLiveRidePage() {
+            mainApp.classList.add('hidden');
+            liveRidePage.classList.remove('hidden');
+        }
+
+        function hideLiveRidePage() {
+            liveRidePage.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+        }
+
+        document.getElementById('stop-btn').onclick = () => {
+            pauseTracking();
+            showPopup('Ride थांबली');
+            document.getElementById('stop-btn').style.display = 'none';
+            document.getElementById('resume-btn').style.display = 'block';
+        };
+
+        document.getElementById('resume-btn').onclick = () => {
+            startGPSTracking();
+            showPopup('Ride पुन्हा सुरु');
+            document.getElementById('stop-btn').style.display = 'block';
+            document.getElementById('resume-btn').style.display = 'none';
+        };
+
+        document.getElementById('reset-btn').onclick = () => {
+            pauseTracking();
+            const endTime = Date.now();
+            const rideDate = new Date(startTime).toLocaleDateString('mr-IN');
+            const fromLoc = positions[0] ? `Lat: ${positions[0].lat.toFixed(4)}, Lon: ${positions[0].lon.toFixed(4)}` : 'N/A';
+            const fromTime = new Date(positions[0]?.time).toLocaleTimeString('mr-IN');
+            const toLoc = positions[positions.length - 1] ? `Lat: ${positions[positions.length - 1].lat.toFixed(4)}, Lon: ${positions[positions.length - 1].lon.toFixed(4)}` : 'N/A';
+            const toTime = new Date(positions[positions.length - 1]?.time).toLocaleTimeString('mr-IN');
+            const totalRideTime = Math.floor((endTime - startTime) / 60000) + ' मिनिटे';
+
+            history.push({
+                date: rideDate,
+                filledAmount: price * filledLiters,
+                price, initialMeter: initialMeterReading,
+                currentMeter: currentMeterReading,
+                driven: odometer,
+                remaining: (filledLiters - (odometer / mileage)) * price,
+                fromLoc, fromTime, toLoc, toTime, totalRideTime
+            });
+            saveUserData();
+
+            rideSummaries.push({ date: rideDate, fromLoc, fromTime, toLoc, toTime, totalRideTime });
+            saveUserData();
+
+            if (map) map.remove();
+            map = null;
+
+            showPopup('Ride जतन झाली');
+            hideLiveRidePage();
+            switchToHomeTab();
+        };
+
+        function switchToHomeTab() {
+            document.querySelectorAll('#bottom-nav .tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('[data-tab="home"]').classList.add('active');
+            document.querySelectorAll('.app-section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById('home-section').classList.remove('hidden');
+        }
+
+        // === USER FLOWS ===
+        function showMeterPopupNewUser() {
+            mainApp.classList.add('hidden');
+            document.getElementById('meter-popup').classList.remove('hidden');
+            document.getElementById('meter-input').value = '';
+            document.getElementById('save-meter-btn').onclick = () => {
+                initialMeterReading = parseFloat(document.getElementById('meter-input').value) || 0;
+                document.getElementById('meter-popup').classList.add('hidden');
+                showRefuelPopupNewUser();
+            };
+        }
+
+        function showRefuelPopupNewUser() {
+            document.getElementById('refuel-popup').classList.remove('hidden');
+            document.getElementById('refuel-amount-section').style.display = 'none';
+            document.getElementById('refuel-yes').onclick = () => {
+                document.getElementById('refuel-amount-section').style.display = 'block';
+            };
+            document.getElementById('refuel-no').onclick = () => {
+                filledLiters = 0;
+                price = 105;
+                document.getElementById('refuel-popup').classList.add('hidden');
+                showMileagePopupNewUser();
+            };
+            document.getElementById('save-refuel-btn').onclick = () => {
+                const newAmount = parseFloat(document.getElementById('refuel-amount').value) || 0;
+                price = 105;
+                filledLiters = newAmount / price;
+                document.getElementById('refuel-popup').classList.add('hidden');
+                showMileagePopupNewUser();
+            };
+        }
+
+        function showMileagePopupNewUser() {
+            document.getElementById('mileage-popup').classList.remove('hidden');
+            document.getElementById('mileage-input-section').style.display = 'none';
+            document.getElementById('mileage-yes').onclick = () => {
+                document.getElementById('mileage-input-section').style.display = 'block';
+            };
+            document.getElementById('mileage-no').onclick = () => {
+                mileage = 40;
+                finishNewUserSetup();
+            };
+            document.getElementById('save-mileage-btn').onclick = () => {
+                mileage = parseFloat(document.getElementById('mileage-input').value) || 40;
+                finishNewUserSetup();
+            };
+        }
+
+        function finishNewUserSetup() {
+            initialSetup = {
+                done: true,
+                initialMeter: initialMeterReading,
+                price: price,
+                filledLiters: filledLiters,
+                mileage: mileage,
+                setupDate: new Date().toISOString()
+            };
+            saveUserData();
+            document.getElementById('mileage-popup').classList.add('hidden');
+            mainApp.classList.remove('hidden');
+            loadLockedData();
+            showPopup('सेटअप पूर्ण! आता GPS सुरु करा.');
+        }
+
+        function showLastRidePopup() {
+            const lastRide = history[history.length - 1];
+            if (!lastRide) {
+                loadLockedData();
+                return;
+            }
+
+            document.getElementById('last-ride-info').innerHTML = `
+                <p><strong>तारीख:</strong> ${lastRide.date}</p>
+                <p><strong>शेवटचे मीटर:</strong> ${lastRide.currentMeter.toFixed(1)}</p>
+                <p><strong>शिल्लक पेट्रोल:</strong> ₹${lastRide.remaining.toFixed(2)}</p>
+                <p><strong>भाव:</strong> ₹${lastRide.price.toFixed(2)}/लिटर</p>
+            `;
+            document.getElementById('last-ride-popup').classList.remove('hidden');
+            document.getElementById('continue-last-ride-btn').onclick = () => {
+                initialMeterReading = lastRide.currentMeter;
+                price = lastRide.price;
+                mileage = initialSetup.mileage || 40;
+                filledLiters = lastRide.remaining / price;
+                document.getElementById('last-ride-popup').classList.add('hidden');
+                showMeterPopupOldUser();
+            };
+            document.getElementById('skip-last-ride-btn').onclick = () => {
+                document.getElementById('last-ride-popup').classList.add('hidden');
+                loadLockedData();
+            };
+        }
+
+        function showMeterPopupOldUser() {
+            mainApp.classList.add('hidden');
+            document.getElementById('meter-popup').classList.remove('hidden');
+            document.getElementById('meter-input').value = initialMeterReading.toFixed(1);
+            document.getElementById('save-meter-btn').onclick = () => {
+                initialMeterReading = parseFloat(document.getElementById('meter-input').value) || initialMeterReading;
+                document.getElementById('meter-popup').classList.add('hidden');
+                showRefuelPopupOldUser();
+            };
+        }
+
+        function showRefuelPopupOldUser() {
+            document.getElementById('refuel-popup').classList.remove('hidden');
+            document.getElementById('refuel-amount-section').style.display = 'none';
+            document.getElementById('refuel-yes').onclick = () => {
+                document.getElementById('refuel-amount-section').style.display = 'block';
+            };
+            document.getElementById('refuel-no').onclick = () => {
+                document.getElementById('refuel-popup').classList.add('hidden');
+                startLiveRideFromHistory();
+            };
+            document.getElementById('save-refuel-btn').onclick = () => {
+                const newAmount = parseFloat(document.getElementById('refuel-amount').value) || 0;
+                filledLiters += newAmount / price;
+                document.getElementById('refuel-popup').classList.add('hidden');
+                startLiveRideFromHistory();
+            };
+        }
+
+        function startLiveRideFromHistory() {
+            odometer = 0;
+            lastPosition = null;
+            lastTime = null;
+            positions = [];
+            startTime = Date.now();
+
+            showLiveRidePage();
+            document.getElementById('stop-btn').style.display = 'block';
+            document.getElementById('resume-btn').style.display = 'none';
+
+            if (createRide) {
+                initMap();
+            }
+
+            updateOdometer();
+            updateResults();
+            startGPSTracking();
+        }
+
+        function loadLockedData() {
+            if (!initialSetup.done) return;
+
+            document.getElementById('locked-initial-meter').classList.remove('hidden');
+            document.getElementById('locked-meter-value').textContent = initialSetup.initialMeter.toFixed(1);
+
+            if (initialSetup.filledLiters > 0) {
+                document.getElementById('locked-petrol').classList.remove('hidden');
+                document.getElementById('locked-petrol-value').textContent = (initialSetup.filledLiters * initialSetup.price).toFixed(2);
+                document.getElementById('locked-liters-value').textContent = initialSetup.filledLiters.toFixed(2);
+            }
+
+            document.getElementById('locked-mileage').classList.remove('hidden');
+            document.getElementById('locked-mileage-value').textContent = initialSetup.mileage.toFixed(1);
+
+            initialMeterReading = initialSetup.initialMeter;
+            price = initialSetup.price;
+            filledLiters = initialSetup.filledLiters;
+            mileage = initialSetup.mileage;
+
+            document.getElementById('price').value = price.toFixed(2);
+            document.getElementById('amount').value = (filledLiters * price).toFixed(2);
+            document.getElementById('mileage').value = mileage.toFixed(1);
+        }
+
+        document.getElementById('setup-btn').onclick = () => {
+            price = parseFloat(document.getElementById('price').value) || 0;
+            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            mileage = parseFloat(document.getElementById('mileage').value) || 1;
+            const initialDriven = parseFloat(document.getElementById('initial_driven').value) || 0;
+
+            if (!price || !amount || !mileage) {
+                alert('सर्व भरा!');
+                return;
+            }
+
+            filledLiters = amount / price;
+            odometer = initialDriven;
+            lastPosition = null;
+            lastTime = null;
+            positions = [];
+            startTime = Date.now();
+            createRide = document.querySelector('[name="createRide"]:checked').value === 'yes';
+
+            showLiveRidePage();
+            document.getElementById('stop-btn').style.display = 'block';
+            document.getElementById('resume-btn').style.display = 'none';
+
+            if (createRide) {
+                initMap();
+            }
+
+            updateOdometer();
+            updateResults();
+            startGPSTracking();
+        };
+
+        function loadHistory() {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            history.forEach((ride, i) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                const continueButton = i === history.length - 1 ? 
+                    `<button class="btn-primary start-ride-from-history" data-index="${i}">राइड सुरु करा</button>` : '';
+                div.innerHTML = `
+                    <p><strong>तारीख:</strong> ${ride.date}</p>
+                    <p><strong>भरलेले:</strong> ₹${ride.filledAmount.toFixed(2)}</p>
+                    <p><strong>भाव:</strong> ₹${ride.price}</p>
+                    <p><strong>सुरुवातीचे मीटर:</strong> ${ride.initialMeter.toFixed(1)}</p>
+                    <p><strong>चालू मीटर:</strong> ${ride.currentMeter.toFixed(1)}</p>
+                    <p><strong>चालले:</strong> ${ride.driven.toFixed(1)} km</p>
+                    ${continueButton}
+                `;
+                list.appendChild(div);
+            });
+
+            document.querySelectorAll('.start-ride-from-history').forEach(btn => {
+                btn.onclick = (e) => {
+                    const idx = parseInt(e.target.dataset.index);
+                    const r = history[idx];
+                    initialMeterReading = r.currentMeter;
+                    price = r.price;
+                    mileage = initialSetup.mileage || 40;
+                    filledLiters = r.remaining / price;
+                    createRide = true;
+                    showMeterPopupOldUser();
+                };
+            });
+        }
+
+        function loadRideSummaries() {
+            const list = document.getElementById('ride-list');
+            list.innerHTML = '';
+            rideSummaries.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'ride-summary';
+                div.innerHTML = `
+                    <p><strong>तारीख:</strong> ${r.date}</p>
+                    <p><strong>सुरुवात:</strong> ${r.fromLoc} | ${r.fromTime}</p>
+                    <p><strong>शेवट:</strong> ${r.toLoc} | ${r.toTime}</p>
+                    <p><strong>वेळ:</strong> ${r.totalRideTime}</p>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function showPopup(msg) {
+            const p = document.getElementById('popup');
+            p.textContent = msg;
+            p.classList.add('anim');
+            p.style.display = 'block';
+            setTimeout(() => { p.style.display = 'none'; p.classList.remove('anim'); }, 2000);
+        }
+
+        // === AUTH & INITIALIZATION ===
+        function loadUserData() {
+            if (users[currentUser]) {
+                userData = users[currentUser];
+                subscription = userData.subscription || {};
+                history = userData.history || [];
+                rideSummaries = userData.rideSummaries || [];
+                initialSetup = userData.initialSetup || {};
+            }
+        }
+
+        function saveUserData() {
+            if (currentUser) {
+                users[currentUser] = {
+                    name: userData.name,
+                    vehicle: userData.vehicle,
+                    mobile: currentUser,
+                    profilePic: userData.profilePic || '',
+                    subscription: subscription,
+                    history: history,
+                    rideSummaries: rideSummaries,
+                    initialSetup: initialSetup
+                };
+                localStorage.setItem('users', JSON.stringify(users));
+            }
+        }
+
+        function initializeFreeTrial() {
+            if (!subscription.trialGiven && currentUser) {
+                const now = new Date();
+                const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                subscription = { endDate: end.toISOString(), isTrial: true, trialGiven: true };
+                saveUserData();
+            }
+        }
+
+        function isSubscriptionActive() {
+            if (!subscription.endDate) return false;
+            const now = new Date().getTime();
+            const end = new Date(subscription.endDate).getTime();
+            const active = now <= end;
+            badge.style.display = active ? 'none' : 'flex';
+            return active;
+        }
+
+        function checkUserType() {
+            const hasHistory = history.length > 0;
+            const setupDone = initialSetup.done === true;
+
+            if (!hasHistory && !setupDone) {
+                showMeterPopupNewUser();
+            } else if (hasHistory) {
+                showLastRidePopup();
+            } else {
+                loadLockedData();
+            }
+        }
+
+        if (currentUser && users[currentUser]) {
+            loadUserData();
+            authSection.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+            updateProfileInfo();
+            initializeFreeTrial();
+            isSubscriptionActive();
+            checkUserType();
+        } else {
+            authSection.classList.remove('hidden');
+            mainApp.classList.add('hidden');
+        }
+
+        document.getElementById('show-signup').onclick = (e) => {
+            e.preventDefault();
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('signup-form').classList.remove('hidden');
+        };
+
+        document.getElementById('show-login').onclick = (e) => {
+            e.preventDefault();
+            document.getElementById('signup-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+        };
+
+        document.getElementById('signup-btn').onclick = () => {
+            const name = document.getElementById('signup-name').value.trim();
+            const vehicle = document.getElementById('signup-vehicle').value.trim().toUpperCase();
+            const mobile = document.getElementById('signup-mobile').value.trim();
+
+            if (!name || !vehicle || mobile.length !== 10 || !/^\d+$/.test(mobile)) {
+                alert('कृपया सर्व माहिती योग्य भरा!');
+                return;
+            }
+
+            if (users[mobile]) {
+                alert('हा मोबाईल नंबर आधीच नोंदवलेला आहे!');
+                return;
+            }
+
+            users[mobile] = { name, vehicle, mobile, profilePic: '', subscription: {}, history: [], rideSummaries: [], initialSetup: { done: false } };
+            localStorage.setItem('users', JSON.stringify(users));
+            currentUser = mobile;
+            localStorage.setItem('currentUser', currentUser);
+            loadUserData();
+
+            const now = new Date();
+            const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            subscription = { endDate: end.toISOString(), isTrial: true, trialGiven: true };
+            saveUserData();
+
+            alert('साइन अप यशस्वी! १ दिवस फ्री ट्रायल.');
+
+            document.getElementById('signup-form').classList.add('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('login-mobile').value = mobile;
+        };
+
+        document.getElementById('login-btn').onclick = () => {
+            const mobile = document.getElementById('login-mobile').value.trim();
+            if (users[mobile]) {
+                currentUser = mobile;
+                localStorage.setItem('currentUser', currentUser);
+                loadUserData();
+                authSection.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                updateProfileInfo();
+                initializeFreeTrial();
+                isSubscriptionActive();
+                checkUserType();
+            } else {
+                alert('हा मोबाईल नंबर सापडला नाही!');
+            }
+        };
+
+        function updateProfileInfo() {
+            ['profile-name', 'profile-name2'].forEach(id => {
+                document.getElementById(id).textContent = userData.name || 'नाव';
+            });
+            ['profile-vehicle', 'profile-vehicle2'].forEach(id => {
+                document.getElementById(id).textContent = userData.vehicle || 'गाडी नंबर';
+            });
+            const pic = userData.profilePic || 'https://via.placeholder.com/100?text=Profile';
+            ['profile-img', 'profile-img2'].forEach(id => {
+                document.getElementById(id).src = pic;
+            });
+        }
+
+        function handleProfileUpload(inputId, imgId) {
+            document.getElementById(inputId).onchange = function() {
+                const file = this.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        userData.profilePic = reader.result;
+                        saveUserData();
+                        updateProfileInfo();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+        }
+        handleProfileUpload('profile-upload', 'profile-img');
+        handleProfileUpload('profile-upload2', 'profile-img2');
+
+        document.getElementById('menu-icon').onclick = () => {
+            document.getElementById('sidebar').classList.add('active');
+        };
+        document.getElementById('close-sidebar').onclick = () => {
+            document.getElementById('sidebar').classList.remove('active');
+        };
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            location.reload();
+        }
+        ['logout-btn', 'logout-btn2'].forEach(id => document.getElementById(id).onclick = logout);
+
+        document.querySelectorAll('#bottom-nav .tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('#bottom-nav .tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelectorAll('.app-section').forEach(sec => sec.classList.add('hidden'));
+                document.getElementById(tab.dataset.tab + '-section').classList.remove('hidden');
+                if (tab.dataset.tab === 'history') loadHistory();
+                if (tab.dataset.tab === 'ride') loadRideSummaries();
+            };
+        });
+
+        document.querySelectorAll('#live-ride-page .tab').forEach(tab => {
+            tab.onclick = () => {
+                hideLiveRidePage();
+                document.querySelectorAll('#bottom-nav .tab').forEach(t => t.classList.remove('active'));
+                document.querySelector(`#bottom-nav [data-tab="${tab.dataset.tab}"]`).classList.add('active');
+                document.querySelectorAll('.app-section').forEach(sec => sec.classList.add('hidden'));
+                document.getElementById(tab.dataset.tab + '-section').classList.remove('hidden');
+            };
+        });
+
+        // === SUBSCRIPTION FLOW ===
+        ['subscribe-btn', 'subscribe-btn2'].forEach(id => {
+            document.getElementById(id).onclick = () => {
+                mainApp.classList.add('hidden');
+                subscriptionPage.classList.remove('hidden');
+            };
+        });
+
+        function closeSubscriptionPage() {
+            subscriptionPage.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+        }
+
+        function closeSuccessPopup() {
+            successPopup.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+            isSubscriptionActive();
+        }
+
+        function buyPlan(type, amount, name) {
+            const options = {
+                key: 'rzp_test_YourKeyHere', // तुमचा Razorpay Key
+                amount: amount * 100,
+                currency: 'INR',
+                name: 'Fualer',
+                description: `${name} सबस्क्रिप्शन`,
+                image: 'https://via.placeholder.com/100',
+                handler: function (response) {
+                    const now = new Date();
+                    let endDate;
+                    if (type === 'week') endDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    else if (type === 'month') endDate = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+                    else endDate = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+                    subscription = {
+                        endDate: endDate.toISOString(),
+                        isTrial: false,
+                        plan: type,
+                        paymentId: response.razorpay_payment_id
+                    };
+                    saveUserData();
+
+                    document.getElementById('success-message').textContent = `${name} सबस्क्रिप्शन यशस्वी! तुम्ही आता पूर्ण फीचर्स वापरू शकता.`;
+                    mainApp.classList.add('hidden');
+                    subscriptionPage.classList.add('hidden');
+                    successPopup.classList.remove('hidden');
+                },
+                prefill: {
+                    name: userData.name,
+                    contact: currentUser
+                },
+                theme: { color: '#667eea' }
+            };
+            const rzp = new Razorpay(options);
+            rzp.open();
+        }
+
+        setTimeout(() => {
+            document.querySelector('.splash').style.display = 'none';
+        }, 2000);
+    </script>
+</body>
+</html>
