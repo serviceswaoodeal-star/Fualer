@@ -45,7 +45,6 @@
 
         #result-box { background:linear-gradient(135deg, #e8f5e8, #d4edda); padding:22px; border-radius:16px; margin:15px 0; border:2px solid #b8e0c1; }
         #result-box h2 { margin:8px 0; font-size:16px; color:#155724; font-weight:600; }
-        #shared-status { margin:8px 0; font-size:16px; color:#007bff; font-weight:600; display: none; }
 
         .hidden { display:none !important; }
 
@@ -225,27 +224,6 @@
         </div>
     </div>
 
-    <!-- Share Ride Popup -->
-    <div id="share-popup" class="popup-full hidden">
-        <div class="container">
-            <h2>Share Ride</h2>
-            <label>User ID (Mobile)</label>
-            <input type="tel" id="share-mobile" placeholder="उदा. 9871234560" maxlength="10">
-            <button id="share-btn" class="btn-primary">Share your ride</button>
-        </div>
-    </div>
-
-    <!-- Incoming Shared Ride Popup -->
-    <div id="incoming-share-popup" class="popup-full hidden">
-        <div class="container">
-            <h2 id="shared-from">Shared Ride from</h2>
-            <div class="ride-info" id="shared-ride-info"></div>
-            <button id="accept-share-btn" class="btn-primary">Accept</button>
-            <button id="reject-share-btn" class="btn-secondary">Reject</button>
-            <button id="start-shared-ride-btn" class="btn-primary" style="display:none; margin-top:10px;">राइड सुरु करा</button>
-        </div>
-    </div>
-
     <!-- Login / Signup -->
     <div class="container" id="auth-section">
         <div id="login-form">
@@ -391,7 +369,6 @@
                 <h2 id="remaining-km"><strong>अजून: 0 किमी</strong></h2>
                 <h2 id="current-speed">स्पीड: 0 किमी/तास</h2>
                 <h2 id="driven-km">गाडी चाललेले: 0.0 किमी</h2>
-                <div id="shared-status" class="hidden"></div>
             </div>
 
             <div id="map" class="hidden"></div>
@@ -412,7 +389,7 @@
 
     <!-- SUBSCRIPTION PAGE -->
     <div id="subscription-page" class="hidden">
-        <div class="back-btn" onclick="closeSubscriptionPage()"><i class="fas fa-arrow-left"></i></div>
+        <div class="back-btn" onclick="closeSubscriptionPage()">Back</div>
         <h1>सबस्क्रिप्शन प्लॅन्स</h1>
         <p>तुमच्या गरजेनुसार निवडा</p>
 
@@ -421,7 +398,7 @@
             <div class="price">₹49 <small>/आठवडा</small></div>
             <ul class="features">
                 <li>पूर्ण GPS ट्रॅकिंग</li>
-                <li>व्हॉ이스 अलर्ट</li>
+                <li>व्हॉइस अलर्ट</li>
                 <li>हिस्ट्री & मॅप</li>
             </ul>
             <button>आता घ्या</button>
@@ -469,20 +446,12 @@
         const subscriptionPage = document.getElementById('subscription-page');
         const successPopup = document.getElementById('success-popup');
         const badge = document.querySelector('#notification-icon .badge');
-        const sharePopup = document.getElementById('share-popup');
-        const incomingSharePopup = document.getElementById('incoming-share-popup');
-        const sharedStatus = document.getElementById('shared-status');
 
         // === STORAGE ===
         let users = JSON.parse(localStorage.getItem('users') || '{}');
         let currentUser = localStorage.getItem('currentUser');
         let userData = {}, subscription = {}, history = [], rideSummaries = [], initialSetup = {};
         let currentPurpose = '';
-        let pendingSharedRides = [], acceptedSharedRides = [], sharedOut = [];
-        let currentSharingRideIndex = null;
-        let isSharedRide = false;
-        let rideOwner = '';
-        let currentRideId = null;
 
         // === GPS VARIABLES ===
         let watchId = null, odometer = 0, filledLiters = 0, price = 0, mileage = 0;
@@ -493,7 +462,7 @@
 
         // === SETUP FLOW VARIABLES ===
         let setupCallback = null;
-        let tempSetup = {};
+        let tempSetup = {}; // Store values during flow
 
         // === VOICE ALERT TRACKING ===
         window.alertedLevels = {};
@@ -504,8 +473,7 @@
             if (marathiVoice) return;
             const voices = speechSynthesis.getVoices();
             marathiVoice = voices.find(v => v.lang === 'mr-IN') || 
-                          voices.find(v => v.lang.startsWith('mr')) || 
-                          voices.find(v => v.name.toLowerCase().includes('marathi'));
+                          voices.find(v => v.name.toLowerCase().includes('marathi') || v.lang.startsWith('mr'));
         }
         if (speechSynthesis.onvoiceschanged !== undefined) {
             speechSynthesis.onvoiceschanged = ensureMarathiVoice;
@@ -643,25 +611,6 @@
         function showLiveRidePage() {
             mainApp.classList.add('hidden');
             liveRidePage.classList.remove('hidden');
-
-            sharedStatus.classList.add('hidden');
-            if (currentRideId && userData.sharedOut) {
-                const shared = userData.sharedOut.find(s => s.ride.rideId === currentRideId && s.accepted);
-                if (shared) {
-                    sharedStatus.textContent = `Shared with: ${shared.to}`;
-                    sharedStatus.classList.remove('hidden');
-                }
-            }
-
-            if (isSharedRide && currentUser !== rideOwner) {
-                document.getElementById('stop-btn').style.display = 'none';
-                document.getElementById('resume-btn').style.display = 'none';
-                document.getElementById('reset-btn').style.display = 'none';
-            } else {
-                document.getElementById('stop-btn').style.display = 'block';
-                document.getElementById('resume-btn').style.display = 'none';
-                document.getElementById('reset-btn').style.display = 'block';
-            }
         }
 
         function hideLiveRidePage() {
@@ -695,7 +644,7 @@
             const toTime = new Date(positions[positions.length - 1]?.time).toLocaleTimeString('mr-IN');
             const totalRideTime = Math.floor((endTime - startTime) / 60000) + ' मिनिटे';
 
-            const newRide = {
+            history.push({
                 date: rideDate,
                 filledAmount: price * filledLiters,
                 price, initialMeter: initialMeterReading,
@@ -703,32 +652,15 @@
                 driven: odometer,
                 remaining: (filledLiters - (odometer / mileage)) * price,
                 fromLoc, fromTime, toLoc, toTime, totalRideTime,
-                purpose: currentPurpose,
-                mileage: mileage,
-                rideId: currentRideId || Date.now().toString()
-            };
+                purpose: currentPurpose
+            });
+            saveUserData();
 
-            history.push(newRide);
-            const newRideSummary = { 
+            rideSummaries.push({ 
                 date: rideDate, 
                 fromLoc, fromTime, toLoc, toTime, totalRideTime,
-                purpose: currentPurpose,
-                rideId: newRide.rideId
-            };
-            rideSummaries.push(newRideSummary);
-
-            if (userData.sharedOut && userData.sharedOut.length > 0) {
-                userData.sharedOut.forEach(s => {
-                    if (s.accepted && s.ride.rideId === currentRideId) {
-                        const shareeData = users[s.to];
-                        if (shareeData) {
-                            shareeData.history.push(newRide);
-                            shareeData.rideSummaries.push(newRideSummary);
-                        }
-                    }
-                });
-            }
-
+                purpose: currentPurpose
+            });
             saveUserData();
 
             if (map) map.remove();
@@ -746,12 +678,13 @@
             document.getElementById('home-section').classList.remove('hidden');
         }
 
+        // === SETUP FLOW ===
         function showSetupFlow(callback) {
             setupCallback = callback;
             tempSetup = {};
             setupTitle.textContent = 'मीटर रिडींग भरा';
             setupContent.innerHTML = `
-                <input type="number" id="setup-meter-input" step="0.1" placeholder="उदा. 24210.5" value="${initialMeterReading.toFixed(1)}" style="margin-bottom:15px;">
+                <input type="number" id="setup-meter-input" step="0.1" placeholder="उदा. 24210.5" style="margin-bottom:15px;">
                 <button id="setup-meter-save" class="btn-primary">पुढे</button>
             `;
             mainApp.classList.add('hidden');
@@ -770,7 +703,7 @@
                 <button id="mileage-no" class="btn-secondary" style="margin-top:10px;">नाही</button>
                 <div id="mileage-input-section" style="display:none; margin-top:15px;">
                     <label>मायलेज (किमी/लिटर)</label>
-                    <input type="number" id="mileage-input" step="0.1" placeholder="उदा. 42" value="${mileage.toFixed(1)}">
+                    <input type="number" id="mileage-input" step="0.1" placeholder="उदा. 42">
                 </div>
             `;
 
@@ -779,7 +712,7 @@
             };
 
             document.getElementById('mileage-no').onclick = () => {
-                tempSetup.mileage = mileage || 40;
+                tempSetup.mileage = 40;
                 showRefuelStep();
             };
 
@@ -816,8 +749,8 @@
             };
 
             document.getElementById('refuel-no').onclick = () => {
-                tempSetup.price = price || 105;
-                tempSetup.filledLiters = filledLiters;
+                tempSetup.filledLiters = 0;
+                tempSetup.price = 105;
                 showPurposeInSetup();
             };
 
@@ -834,8 +767,8 @@
 
             saveBtn.onclick = () => {
                 const amount = parseFloat(document.getElementById('refuel-amount').value) || 0;
-                tempSetup.price = price || 105;
-                tempSetup.filledLiters = filledLiters + amount / tempSetup.price;
+                tempSetup.price = 105;
+                tempSetup.filledLiters = amount / tempSetup.price;
                 showPurposeInSetup();
             };
         }
@@ -843,13 +776,14 @@
         function showPurposeInSetup() {
             setupTitle.textContent = 'कोणत्या कामासाठी चालले?';
             setupContent.innerHTML = `
-                <input type="text" id="purpose-input" placeholder="उदा. ऑफिस, दुकान, मित्राकडे" value="${currentPurpose}" style="margin-bottom:15px;">
+                <input type="text" id="purpose-input" placeholder="उदा. ऑफिस, दुकान, मित्राकडे" style="margin-bottom:15px;">
                 <button id="save-purpose-btn" class="btn-primary">Save करा</button>
             `;
 
             document.getElementById('save-purpose-btn').onclick = () => {
                 currentPurpose = document.getElementById('purpose-input').value.trim() || 'कोणतेही काम नाही';
                 
+                // Finalize setup
                 initialMeterReading = tempSetup.initialMeter;
                 price = tempSetup.price;
                 filledLiters = tempSetup.filledLiters;
@@ -906,10 +840,6 @@
                 price = lastRide.price;
                 filledLiters = lastRide.remaining / price;
                 currentPurpose = lastRide.purpose || '';
-                mileage = lastRide.mileage || 40;
-                currentRideId = lastRide.rideId;
-                isSharedRide = false;
-                rideOwner = currentUser;
                 updatePurposeDisplay();
                 document.getElementById('last-ride-popup').classList.add('hidden');
                 showSetupFlow(() => {
@@ -1017,13 +947,8 @@
             history.forEach((ride, i) => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
-                let buttons = '';
-                if (i === history.length - 1) {
-                    buttons = `
-                        <button class="btn-primary start-ride-from-history" data-index="${i}">राइड सुरु करा</button>
-                        <button class="btn-primary share-ride" data-index="${i}" style="margin-top:10px;">Share</button>
-                    `;
-                }
+                const continueButton = i === history.length - 1 ? 
+                    `<button class="btn-primary start-ride-from-history" data-index="${i}">राइड सुरु करा</button>` : '';
                 div.innerHTML = `
                     <p><strong>तारीख:</strong> ${ride.date}</p>
                     <p><strong>भरलेले:</strong> ₹${ride.filledAmount.toFixed(2)}</p>
@@ -1032,7 +957,7 @@
                     <p><strong>चालू मीटर:</strong> ${ride.currentMeter.toFixed(1)}</p>
                     <p><strong>चालले:</strong> ${ride.driven.toFixed(1)} km</p>
                     <p><strong style="color:#007bff;">काम:</strong> ${ride.purpose || 'N/A'}</p>
-                    ${buttons}
+                    ${continueButton}
                 `;
                 list.appendChild(div);
             });
@@ -1044,23 +969,12 @@
                     initialMeterReading = r.currentMeter;
                     price = r.price;
                     filledLiters = r.remaining / price;
-                    mileage = r.mileage || 40;
                     currentPurpose = r.purpose || '';
-                    currentRideId = r.rideId;
-                    isSharedRide = false;
-                    rideOwner = currentUser;
                     updatePurposeDisplay();
                     createRide = true;
                     showSetupFlow(() => {
                         startLiveRideFromHistory();
                     });
-                };
-            });
-
-            document.querySelectorAll('.share-ride').forEach(btn => {
-                btn.onclick = (e) => {
-                    currentSharingRideIndex = parseInt(e.target.dataset.index);
-                    sharePopup.classList.remove('hidden');
                 };
             });
         }
@@ -1090,62 +1004,6 @@
             setTimeout(() => { p.style.display = 'none'; p.classList.remove('anim'); }, 2000);
         }
 
-        function showIncomingSharePopup(shared) {
-            document.getElementById('shared-from').textContent = `Shared Ride from ${shared.from}`;
-            document.getElementById('shared-ride-info').innerHTML = `
-                <p><strong>तारीख:</strong> ${shared.ride.date}</p>
-                <p><strong>शेवटचे मीटर:</strong> ${shared.ride.currentMeter.toFixed(1)}</p>
-                <p><strong>शिल्लक पेट्रोल:</strong> ₹${shared.ride.remaining.toFixed(2)}</p>
-                <p><strong>भाव:</strong> ₹${shared.ride.price.toFixed(2)}/लिटर</p>
-                <p><strong style="color:#007bff;">काम:</strong> ${shared.ride.purpose || 'N/A'}</p>
-            `;
-            incomingSharePopup.classList.remove('hidden');
-
-            document.getElementById('accept-share-btn').onclick = () => {
-                userData.pendingSharedRides = userData.pendingSharedRides.filter(s => s.ride.rideId !== shared.ride.rideId);
-                userData.acceptedSharedRides.push({...shared, accepted: true});
-
-                const sharerData = users[shared.from];
-                sharerData.sharedOut = sharerData.sharedOut || [];
-                const index = sharerData.sharedOut.findIndex(s => s.ride.rideId === shared.ride.rideId);
-                if (index !== -1) {
-                    sharerData.sharedOut[index].accepted = true;
-                } else {
-                    sharerData.sharedOut.push({to: currentUser, ride: shared.ride, accepted: true});
-                }
-
-                saveUserData();
-
-                document.getElementById('accept-share-btn').style.display = 'none';
-                document.getElementById('reject-share-btn').style.display = 'none';
-                document.getElementById('start-shared-ride-btn').style.display = 'block';
-
-                // To show on sharer's page, since local, when sharer loads, it will show.
-                alert('Ride accepted! Sharer will see it on reload.');
-            };
-
-            document.getElementById('reject-share-btn').onclick = () => {
-                userData.pendingSharedRides = userData.pendingSharedRides.filter(s => s.ride.rideId !== shared.ride.rideId);
-                saveUserData();
-                incomingSharePopup.classList.add('hidden');
-            };
-
-            document.getElementById('start-shared-ride-btn').onclick = () => {
-                const sharedRide = shared.ride;
-                initialMeterReading = sharedRide.initialMeter;
-                price = sharedRide.price;
-                filledLiters = sharedRide.filledAmount / price;
-                mileage = sharedRide.mileage || 40;
-                currentPurpose = sharedRide.purpose || '';
-                currentRideId = sharedRide.rideId;
-                isSharedRide = true;
-                rideOwner = shared.from;
-                updatePurposeDisplay();
-                incomingSharePopup.classList.add('hidden');
-                startLiveRideFromHistory();
-            };
-        }
-
         // === AUTH & INITIALIZATION ===
         function loadUserData() {
             if (users[currentUser]) {
@@ -1155,9 +1013,6 @@
                 rideSummaries = userData.rideSummaries || [];
                 initialSetup = userData.initialSetup || {};
                 currentPurpose = userData.currentPurpose || '';
-                pendingSharedRides = userData.pendingSharedRides || [];
-                acceptedSharedRides = userData.acceptedSharedRides || [];
-                sharedOut = userData.sharedOut || [];
             }
         }
 
@@ -1172,10 +1027,7 @@
                     history: history,
                     rideSummaries: rideSummaries,
                     initialSetup: initialSetup,
-                    currentPurpose: currentPurpose,
-                    pendingSharedRides: pendingSharedRides,
-                    acceptedSharedRides: acceptedSharedRides,
-                    sharedOut: sharedOut
+                    currentPurpose: currentPurpose
                 };
                 localStorage.setItem('users', JSON.stringify(users));
             }
@@ -1211,9 +1063,6 @@
             } else {
                 loadLockedData();
             }
-            if (pendingSharedRides.length > 0) {
-                showIncomingSharePopup(pendingSharedRides[0]);
-            }
         } else {
             authSection.classList.remove('hidden');
             mainApp.classList.add('hidden');
@@ -1246,7 +1095,7 @@
                 return;
             }
 
-            users[mobile] = { name, vehicle, mobile, profilePic: '', subscription: {}, history: [], rideSummaries: [], initialSetup: { done: false }, currentPurpose: '', pendingSharedRides: [], acceptedSharedRides: [], sharedOut: [] };
+            users[mobile] = { name, vehicle, mobile, profilePic: '', subscription: {}, history: [], rideSummaries: [], initialSetup: { done: false }, currentPurpose: '' };
             localStorage.setItem('users', JSON.stringify(users));
             currentUser = mobile;
             localStorage.setItem('currentUser', currentUser);
@@ -1279,9 +1128,6 @@
                     showSetupFlow(() => {});
                 } else {
                     loadLockedData();
-                }
-                if (pendingSharedRides.length > 0) {
-                    showIncomingSharePopup(pendingSharedRides[0]);
                 }
             } else {
                 alert('हा मोबाईल नंबर सापडला नाही!');
@@ -1351,62 +1197,6 @@
                 document.getElementById(tab.dataset.tab + '-section').classList.remove('hidden');
             };
         });
-
-        // === SHARE BUTTON ===
-        document.getElementById('share-btn').onclick = () => {
-            const targetMobile = document.getElementById('share-mobile').value.trim();
-            if (!users[targetMobile]) {
-                alert('User not found!');
-                return;
-            }
-            const ride = history[currentSharingRideIndex];
-            const detailsContainer = document.createElement('div');
-            detailsContainer.className = 'popup-full';
-            detailsContainer.id = 'share-details-popup';
-            detailsContainer.innerHTML = `
-                <div class="container">
-                    <h2>Share Ride Details</h2>
-                    <label>मीटर रिडींग</label>
-                    <input type="number" id="share-meter" value="${ride.currentMeter.toFixed(1)}" readonly>
-                    <label>पेट्रोल (₹)</label>
-                    <input type="number" id="share-petrol" placeholder="120" step="0.01">
-                    <label>मायलेज (किमी/लिटर)</label>
-                    <input type="number" id="share-mileage" value="${ride.mileage || 40}" step="0.1">
-                    <label>कोणत्या कामासाठी</label>
-                    <input type="text" id="share-purpose" value="${ride.purpose || ''}" placeholder="उदा. ऑफिस">
-                    <button id="share-now-btn" class="btn-primary">Share Now</button>
-                </div>
-            `;
-            document.body.appendChild(detailsContainer);
-
-            document.getElementById('share-now-btn').onclick = () => {
-                const newAmount = parseFloat(document.getElementById('share-petrol').value) || 0;
-                const newMileage = parseFloat(document.getElementById('share-mileage').value) || 40;
-                const newPurpose = document.getElementById('share-purpose').value.trim();
-                const newPrice = ride.price;
-                const newFilledLiters = (ride.remaining / newPrice) + (newAmount / newPrice);
-                const newRemaining = ride.remaining + newAmount;
-                const newRide = {
-                    date: new Date().toLocaleDateString('mr-IN'),
-                    filledAmount: newRemaining,
-                    price: newPrice,
-                    initialMeter: ride.currentMeter,
-                    currentMeter: ride.currentMeter,
-                    driven: 0,
-                    remaining: newRemaining,
-                    purpose: newPurpose,
-                    mileage: newMileage,
-                    rideId: Date.now().toString()
-                };
-                const targetData = users[targetMobile];
-                targetData.pendingSharedRides = targetData.pendingSharedRides || [];
-                targetData.pendingSharedRides.push({from: currentUser, ride: newRide});
-                saveUserData();
-                document.body.removeChild(detailsContainer);
-                sharePopup.classList.add('hidden');
-                showPopup('Ride shared!');
-            };
-        };
 
         // === SUBSCRIPTION FLOW ===
         ['subscribe-btn', 'subscribe-btn2'].forEach(id => {
