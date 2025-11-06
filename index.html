@@ -45,6 +45,7 @@
 
         #result-box { background:linear-gradient(135deg, #e8f5e8, #d4edda); padding:22px; border-radius:16px; margin:15px 0; border:2px solid #b8e0c1; }
         #result-box h2 { margin:8px 0; font-size:16px; color:#155724; font-weight:600; }
+        #shared-status { margin:8px 0; font-size:16px; color:#007bff; font-weight:600; display: none; }
 
         .hidden { display:none !important; }
 
@@ -209,7 +210,7 @@
     <!-- Setup Flow Popup -->
     <div id="setup-flow-popup" class="popup-full hidden">
         <div class="container">
-            <h2 id="setup-title">मीटर रिडींग भरा</h2>
+            <h2 id="setup-title">मीเตอร์ रिडींग भरा</h2>
             <div id="setup-content"></div>
         </div>
     </div>
@@ -221,6 +222,27 @@
             <div class="ride-info" id="last-ride-info"></div>
             <button id="continue-last-ride-btn" class="btn-primary">राइड सुरु करा</button>
             <button id="skip-last-ride-btn" class="btn-secondary" style="margin-top:10px;">नवीन राइड सुरु करा</button>
+        </div>
+    </div>
+
+    <!-- Share Ride Popup -->
+    <div id="share-popup" class="popup-full hidden">
+        <div class="container">
+            <h2>Share Ride</h2>
+            <label>User ID (Mobile)</label>
+            <input type="tel" id="share-mobile" placeholder="उदा. 9871234560" maxlength="10">
+            <button id="share-btn" class="btn-primary">Share your ride</button>
+        </div>
+    </div>
+
+    <!-- Incoming Shared Ride Popup -->
+    <div id="incoming-share-popup" class="popup-full hidden">
+        <div class="container">
+            <h2 id="shared-from">Shared Ride from</h2>
+            <div class="ride-info" id="shared-ride-info"></div>
+            <button id="accept-share-btn" class="btn-primary">Accept</button>
+            <button id="reject-share-btn" class="btn-secondary">Reject</button>
+            <button id="start-shared-ride-btn" class="btn-primary" style="display:none; margin-top:10px;">राइड सुरु करा</button>
         </div>
     </div>
 
@@ -369,6 +391,7 @@
                 <h2 id="remaining-km"><strong>अजून: 0 किमी</strong></h2>
                 <h2 id="current-speed">स्पीड: 0 किमी/तास</h2>
                 <h2 id="driven-km">गाडी चाललेले: 0.0 किमी</h2>
+                <div id="shared-status" class="hidden"></div>
             </div>
 
             <div id="map" class="hidden"></div>
@@ -389,7 +412,7 @@
 
     <!-- SUBSCRIPTION PAGE -->
     <div id="subscription-page" class="hidden">
-        <div class="back-btn" onclick="closeSubscriptionPage()">Back</div>
+        <div class="back-btn" onclick="closeSubscriptionPage()"><i class="fas fa-arrow-left"></i></div>
         <h1>सबस्क्रिप्शन प्लॅन्स</h1>
         <p>तुमच्या गरजेनुसार निवडा</p>
 
@@ -446,12 +469,20 @@
         const subscriptionPage = document.getElementById('subscription-page');
         const successPopup = document.getElementById('success-popup');
         const badge = document.querySelector('#notification-icon .badge');
+        const sharePopup = document.getElementById('share-popup');
+        const incomingSharePopup = document.getElementById('incoming-share-popup');
+        const sharedStatus = document.getElementById('shared-status');
 
         // === STORAGE ===
         let users = JSON.parse(localStorage.getItem('users') || '{}');
         let currentUser = localStorage.getItem('currentUser');
         let userData = {}, subscription = {}, history = [], rideSummaries = [], initialSetup = {};
         let currentPurpose = '';
+        let pendingSharedRides = [], acceptedSharedRides = [], sharedOut = [];
+        let currentSharingRideIndex = null;
+        let isSharedRide = false;
+        let rideOwner = '';
+        let currentRideId = null;
 
         // === GPS VARIABLES ===
         let watchId = null, odometer = 0, filledLiters = 0, price = 0, mileage = 0;
@@ -611,6 +642,27 @@
         function showLiveRidePage() {
             mainApp.classList.add('hidden');
             liveRidePage.classList.remove('hidden');
+
+            // Check for shared status
+            sharedStatus.classList.add('hidden');
+            if (currentRideId && userData.sharedOut) {
+                const shared = userData.sharedOut.find(s => s.ride.rideId === currentRideId && s.accepted);
+                if (shared) {
+                    sharedStatus.textContent = `Shared with: ${shared.to}`;
+                    sharedStatus.classList.remove('hidden');
+                }
+            }
+
+            // Control buttons based on ownership
+            if (isSharedRide && currentUser !== rideOwner) {
+                document.getElementById('stop-btn').style.display = 'none';
+                document.getElementById('resume-btn').style.display = 'none';
+                document.getElementById('reset-btn').style.display = 'none';
+            } else {
+                document.getElementById('stop-btn').style.display = 'block';
+                document.getElementById('resume-btn').style.display = 'none';
+                document.getElementById('reset-btn').style.display = 'block';
+            }
         }
 
         function hideLiveRidePage() {
@@ -644,7 +696,7 @@
             const toTime = new Date(positions[positions.length - 1]?.time).toLocaleTimeString('mr-IN');
             const totalRideTime = Math.floor((endTime - startTime) / 60000) + ' मिनिटे';
 
-            history.push({
+            const newRide = {
                 date: rideDate,
                 filledAmount: price * filledLiters,
                 price, initialMeter: initialMeterReading,
@@ -652,15 +704,33 @@
                 driven: odometer,
                 remaining: (filledLiters - (odometer / mileage)) * price,
                 fromLoc, fromTime, toLoc, toTime, totalRideTime,
-                purpose: currentPurpose
-            });
-            saveUserData();
+                purpose: currentPurpose,
+                mileage: mileage,
+                rideId: Date.now()
+            };
 
-            rideSummaries.push({ 
+            history.push(newRide);
+            const newRideSummary = { 
                 date: rideDate, 
                 fromLoc, fromTime, toLoc, toTime, totalRideTime,
-                purpose: currentPurpose
-            });
+                purpose: currentPurpose,
+                rideId: newRide.rideId
+            };
+            rideSummaries.push(newRideSummary);
+
+            // If shared, save to sharees
+            if (userData.sharedOut && userData.sharedOut.length > 0) {
+                userData.sharedOut.forEach(s => {
+                    if (s.accepted && s.ride.rideId === currentRideId) {
+                        const shareeData = users[s.to];
+                        if (shareeData) {
+                            shareeData.history.push(newRide);
+                            shareeData.rideSummaries.push(newRideSummary);
+                        }
+                    }
+                });
+            }
+
             saveUserData();
 
             if (map) map.remove();
@@ -840,6 +910,10 @@
                 price = lastRide.price;
                 filledLiters = lastRide.remaining / price;
                 currentPurpose = lastRide.purpose || '';
+                mileage = lastRide.mileage || 40;
+                currentRideId = lastRide.rideId;
+                isSharedRide = false;
+                rideOwner = currentUser;
                 updatePurposeDisplay();
                 document.getElementById('last-ride-popup').classList.add('hidden');
                 showSetupFlow(() => {
@@ -947,8 +1021,13 @@
             history.forEach((ride, i) => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
-                const continueButton = i === history.length - 1 ? 
-                    `<button class="btn-primary start-ride-from-history" data-index="${i}">राइड सुरु करा</button>` : '';
+                let buttons = '';
+                if (i === history.length - 1) {
+                    buttons = `
+                        <button class="btn-primary start-ride-from-history" data-index="${i}">राइड सुरु करा</button>
+                        <button class="btn-primary share-ride" data-index="${i}" style="margin-top:10px;">Share</button>
+                    `;
+                }
                 div.innerHTML = `
                     <p><strong>तारीख:</strong> ${ride.date}</p>
                     <p><strong>भरलेले:</strong> ₹${ride.filledAmount.toFixed(2)}</p>
@@ -957,7 +1036,7 @@
                     <p><strong>चालू मीटर:</strong> ${ride.currentMeter.toFixed(1)}</p>
                     <p><strong>चालले:</strong> ${ride.driven.toFixed(1)} km</p>
                     <p><strong style="color:#007bff;">काम:</strong> ${ride.purpose || 'N/A'}</p>
-                    ${continueButton}
+                    ${buttons}
                 `;
                 list.appendChild(div);
             });
@@ -969,12 +1048,23 @@
                     initialMeterReading = r.currentMeter;
                     price = r.price;
                     filledLiters = r.remaining / price;
+                    mileage = r.mileage || 40;
                     currentPurpose = r.purpose || '';
+                    currentRideId = r.rideId;
+                    isSharedRide = false;
+                    rideOwner = currentUser;
                     updatePurposeDisplay();
                     createRide = true;
                     showSetupFlow(() => {
                         startLiveRideFromHistory();
                     });
+                };
+            });
+
+            document.querySelectorAll('.share-ride').forEach(btn => {
+                btn.onclick = (e) => {
+                    currentSharingRideIndex = parseInt(e.target.dataset.index);
+                    sharePopup.classList.remove('hidden');
                 };
             });
         }
@@ -1004,6 +1094,54 @@
             setTimeout(() => { p.style.display = 'none'; p.classList.remove('anim'); }, 2000);
         }
 
+        function showIncomingSharePopup(shared) {
+            document.getElementById('shared-from').textContent = `Shared Ride from ${shared.from}`;
+            document.getElementById('shared-ride-info').innerHTML = `
+                <p><strong>तारीख:</strong> ${shared.ride.date}</p>
+                <p><strong>शेवटचे मीटर:</strong> ${shared.ride.currentMeter.toFixed(1)}</p>
+                <p><strong>शिल्लक पेट्रोल:</strong> ₹${shared.ride.remaining.toFixed(2)}</p>
+                <p><strong>भाव:</strong> ₹${shared.ride.price.toFixed(2)}/लिटर</p>
+                <p><strong style="color:#007bff;">काम:</strong> ${shared.ride.purpose || 'N/A'}</p>
+            `;
+            incomingSharePopup.classList.remove('hidden');
+
+            document.getElementById('accept-share-btn').onclick = () => {
+                userData.pendingSharedRides = userData.pendingSharedRides.filter(s => s.ride.rideId !== shared.ride.rideId);
+                userData.acceptedSharedRides.push({...shared, accepted: true});
+
+                const sharerData = users[shared.from];
+                sharerData.sharedOut = sharerData.sharedOut || [];
+                sharerData.sharedOut.push({to: currentUser, ride: shared.ride, accepted: true});
+
+                saveUserData();
+
+                document.getElementById('accept-share-btn').style.display = 'none';
+                document.getElementById('reject-share-btn').style.display = 'none';
+                document.getElementById('start-shared-ride-btn').style.display = 'block';
+            };
+
+            document.getElementById('reject-share-btn').onclick = () => {
+                userData.pendingSharedRides = userData.pendingSharedRides.filter(s => s.ride.rideId !== shared.ride.rideId);
+                saveUserData();
+                incomingSharePopup.classList.add('hidden');
+            };
+
+            document.getElementById('start-shared-ride-btn').onclick = () => {
+                const sharedRide = shared.ride;
+                initialMeterReading = sharedRide.currentMeter;
+                price = sharedRide.price;
+                filledLiters = sharedRide.remaining / sharedRide.price;
+                mileage = sharedRide.mileage || 40;
+                currentPurpose = sharedRide.purpose || '';
+                currentRideId = sharedRide.rideId;
+                isSharedRide = true;
+                rideOwner = shared.from;
+                updatePurposeDisplay();
+                incomingSharePopup.classList.add('hidden');
+                startLiveRideFromHistory();
+            };
+        }
+
         // === AUTH & INITIALIZATION ===
         function loadUserData() {
             if (users[currentUser]) {
@@ -1013,6 +1151,9 @@
                 rideSummaries = userData.rideSummaries || [];
                 initialSetup = userData.initialSetup || {};
                 currentPurpose = userData.currentPurpose || '';
+                pendingSharedRides = userData.pendingSharedRides || [];
+                acceptedSharedRides = userData.acceptedSharedRides || [];
+                sharedOut = userData.sharedOut || [];
             }
         }
 
@@ -1027,7 +1168,10 @@
                     history: history,
                     rideSummaries: rideSummaries,
                     initialSetup: initialSetup,
-                    currentPurpose: currentPurpose
+                    currentPurpose: currentPurpose,
+                    pendingSharedRides: pendingSharedRides,
+                    acceptedSharedRides: acceptedSharedRides,
+                    sharedOut: sharedOut
                 };
                 localStorage.setItem('users', JSON.stringify(users));
             }
@@ -1063,6 +1207,9 @@
             } else {
                 loadLockedData();
             }
+            if (pendingSharedRides.length > 0) {
+                showIncomingSharePopup(pendingSharedRides[0]);
+            }
         } else {
             authSection.classList.remove('hidden');
             mainApp.classList.add('hidden');
@@ -1095,7 +1242,7 @@
                 return;
             }
 
-            users[mobile] = { name, vehicle, mobile, profilePic: '', subscription: {}, history: [], rideSummaries: [], initialSetup: { done: false }, currentPurpose: '' };
+            users[mobile] = { name, vehicle, mobile, profilePic: '', subscription: {}, history: [], rideSummaries: [], initialSetup: { done: false }, currentPurpose: '', pendingSharedRides: [], acceptedSharedRides: [], sharedOut: [] };
             localStorage.setItem('users', JSON.stringify(users));
             currentUser = mobile;
             localStorage.setItem('currentUser', currentUser);
@@ -1128,6 +1275,9 @@
                     showSetupFlow(() => {});
                 } else {
                     loadLockedData();
+                }
+                if (pendingSharedRides.length > 0) {
+                    showIncomingSharePopup(pendingSharedRides[0]);
                 }
             } else {
                 alert('हा मोबाईल नंबर सापडला नाही!');
@@ -1197,6 +1347,22 @@
                 document.getElementById(tab.dataset.tab + '-section').classList.remove('hidden');
             };
         });
+
+        // === SHARE BUTTON ===
+        document.getElementById('share-btn').onclick = () => {
+            const targetMobile = document.getElementById('share-mobile').value.trim();
+            if (!users[targetMobile]) {
+                alert('User not found!');
+                return;
+            }
+            const ride = history[currentSharingRideIndex];
+            const targetData = users[targetMobile];
+            targetData.pendingSharedRides = targetData.pendingSharedRides || [];
+            targetData.pendingSharedRides.push({from: currentUser, ride: {...ride}});
+            localStorage.setItem('users', JSON.stringify(users));
+            sharePopup.classList.add('hidden');
+            showPopup('Ride shared!');
+        };
 
         // === SUBSCRIPTION FLOW ===
         ['subscribe-btn', 'subscribe-btn2'].forEach(id => {
